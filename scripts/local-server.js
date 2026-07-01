@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const rootDir = path.join(__dirname, '..');
 
 const app = express();
 const PORT = 3000;
@@ -16,7 +17,7 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
 // Ensure uploads directory exists
-const uploadsDir = path.join(__dirname, 'uploads');
+const uploadsDir = path.join(rootDir, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir);
 }
@@ -74,7 +75,7 @@ app.post('/api/upload-html', (req, res) => {
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Serve the rest of the application
-app.use(express.static(__dirname));
+app.use(express.static(rootDir));
 
 app.listen(PORT, '0.0.0.0', () => {
   const ip = getLocalIP();
