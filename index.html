@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1080, initial-scale=1.0" />
+  <title>Photo Booth Experience</title>
+  <meta name="description" content="Step into your future — AI-powered branded event photo booth experience." />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Dancing+Script:wght@400;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- QR Code Library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <!-- MediaPipe (only loaded when INPUT_MODE = "airwrite") -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- Print target (hidden except during printing) -->
+  <img id="print-target" src="" alt="Your photo booth portrait" />
+</head>
+<body>
+
+  <!-- Ambient Particle Background -->
+  <canvas id="bg-particles" aria-hidden="true"></canvas>
+
+  <!-- Persistent Background Camera Feed (visible on screens 1, 2, 3) -->
+  <video id="bg-camera" autoplay playsinline muted aria-hidden="true"></video>
+  <!-- Dark overlay on top of camera so text remains readable -->
+  <div id="bg-camera-overlay" aria-hidden="true"></div>
+
+  <!-- Custom Gold Cursor -->
+  <div id="custom-cursor" aria-hidden="true"></div>
+
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SCREEN 1 — Dream Job Input
+       ═══════════════════════════════════════════════════════════════ -->
+  <section id="screen-job-input" class="screen active" role="main" aria-label="Dream Job Input">
+    <div class="screen-inner">
+      <div class="logo-wrap">
+        <img src="logo.png" alt="Event Logo" class="logo" id="logo-s1" />
+      </div>
+
+      <div class="gold-divider"></div>
+
+      <div class="screen-content">
+        <h1 class="heading-display" id="job-heading">What is your<br /><em>dream job?</em></h1>
+        <p class="sub-label" id="job-sublabel">Type your answer below</p>
+
+        <!-- Keyboard Mode Input -->
+        <div id="job-keyboard-wrap" class="input-wrap hidden">
+          <textarea
+            id="job-keyboard-input"
+            class="styled-textarea"
+            placeholder="e.g. Astronaut, Chef, Doctor..."
+            maxlength="80"
+            rows="2"
+            aria-label="Your dream job"
+          ></textarea>
+        </div>
+
+        <!-- Touch Draw Mode -->
+        <div id="job-touch-wrap" class="canvas-input-wrap hidden">
+          <canvas id="job-touch-canvas" width="900" height="220" aria-label="Draw your dream job"></canvas>
+          <button class="btn-ghost-sm" id="job-touch-clear" type="button">Clear</button>
+        </div>
+
+        <!-- Air Write Mode -->
+        <div id="job-airwrite-wrap" class="airwrite-wrap hidden">
+          <div class="airwrite-preview-wrap">
+            <video id="job-airwrite-video" autoplay playsinline muted aria-hidden="true"></video>
+          </div>
+          <canvas id="job-airwrite-canvas" width="900" height="220" aria-label="Air-write your dream job"></canvas>
+          <div class="airwrite-tools">
+            <button class="tool-btn active" data-tool="pen" type="button" aria-label="Pen Tool">🖊️</button>
+            <button class="tool-btn" data-tool="eraser" type="button" aria-label="Eraser Tool">🧽</button>
+          </div>
+          <!-- Pinch progress SVG overlay -->
+          <svg id="job-pinch-svg" class="pinch-svg hidden" viewBox="0 0 40 40" aria-hidden="true">
+            <circle cx="20" cy="20" r="16" class="pinch-track" />
+            <circle cx="20" cy="20" r="16" class="pinch-progress" id="job-pinch-progress" />
+          </svg>
+          <div class="airwrite-erase-flash hidden" id="job-erase-flash"></div>
+          <p class="airwrite-instructions">Write with index finger &mdash; Pinch to confirm &mdash; Open hand to erase</p>
+        </div>
+
+        <!-- Confirm Button (keyboard + touch) -->
+        <button class="btn-gold-filled btn-next" id="job-next-btn" type="button">
+          Next <span class="btn-arrow">&#8594;</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SCREEN 2 — Signature Input
+       ═══════════════════════════════════════════════════════════════ -->
+  <section id="screen-signature" class="screen" role="main" aria-label="Signature Input">
+    <div class="screen-inner">
+      <div class="logo-wrap">
+        <img src="logo.png" alt="Event Logo" class="logo" id="logo-s2" />
+      </div>
+
+      <div class="gold-divider"></div>
+
+      <div class="screen-content">
+        <h1 class="heading-display">Add your<br /><em>signature</em></h1>
+        <p class="sub-label">Your signature will appear on your final photo</p>
+
+        <!-- Keyboard Mode: text input → rendered onto canvas -->
+        <div id="sig-keyboard-wrap" class="input-wrap hidden">
+          <input
+            type="text"
+            id="sig-keyboard-input"
+            class="styled-input"
+            placeholder="Type your name..."
+            maxlength="40"
+            aria-label="Your signature"
+          />
+          <canvas id="sig-keyboard-canvas" width="500" height="160" class="sig-preview-canvas" aria-label="Signature preview"></canvas>
+        </div>
+
+        <!-- Touch Draw Mode -->
+        <div id="sig-touch-wrap" class="canvas-input-wrap hidden">
+          <canvas id="sig-touch-canvas" width="500" height="160" aria-label="Draw your signature"></canvas>
+          <button class="btn-ghost-sm" id="sig-touch-clear" type="button">Clear</button>
+        </div>
+
+        <!-- Air Write Mode -->
+        <div id="sig-airwrite-wrap" class="airwrite-wrap hidden">
+          <div class="airwrite-preview-wrap">
+            <video id="sig-airwrite-video" autoplay playsinline muted aria-hidden="true"></video>
+          </div>
+          <canvas id="sig-airwrite-canvas" width="500" height="160" aria-label="Air-write your signature"></canvas>
+          <div class="airwrite-tools">
+            <button class="tool-btn active" data-tool="pen" type="button" aria-label="Pen Tool">🖊️</button>
+            <button class="tool-btn" data-tool="eraser" type="button" aria-label="Eraser Tool">🧽</button>
+          </div>
+          <svg id="sig-pinch-svg" class="pinch-svg hidden" viewBox="0 0 40 40" aria-hidden="true">
+            <circle cx="20" cy="20" r="16" class="pinch-track" />
+            <circle cx="20" cy="20" r="16" class="pinch-progress" id="sig-pinch-progress" />
+          </svg>
+          <div class="airwrite-erase-flash hidden" id="sig-erase-flash"></div>
+          <p class="airwrite-instructions">Write with index finger &mdash; Pinch to confirm &mdash; Open hand to erase</p>
+        </div>
+
+        <button class="btn-gold-filled btn-next" id="sig-next-btn" type="button">
+          Next <span class="btn-arrow">&#8594;</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SCREEN 3 — Countdown + Camera Capture
+       ═══════════════════════════════════════════════════════════════ -->
+  <section id="screen-countdown" class="screen" role="main" aria-label="Camera Countdown">
+    <!-- Camera feed is the persistent #bg-camera element (no separate video element needed) -->
+
+    <!-- Overlay elements on top of camera -->
+    <div class="countdown-overlay">
+      <!-- Logo top-center -->
+      <div class="countdown-logo-wrap">
+        <img src="logo.png" alt="Event Logo" class="logo countdown-logo" />
+      </div>
+
+      <!-- Countdown ring + number -->
+      <div class="countdown-center">
+        <div class="countdown-ring-wrap">
+          <svg class="countdown-svg" viewBox="0 0 400 400" aria-hidden="true">
+            <circle class="cd-track" cx="200" cy="200" r="180" />
+            <circle class="cd-ring" id="cd-ring" cx="200" cy="200" r="180" />
+          </svg>
+          <span class="countdown-number" id="countdown-number" aria-live="polite">5</span>
+        </div>
+        <p class="countdown-smile">Smile!</p>
+      </div>
+
+      <!-- Bottom progress bar -->
+      <div class="countdown-progress-wrap">
+        <div class="countdown-progress-bar" id="countdown-progress-bar"></div>
+      </div>
+    </div>
+
+    <!-- Camera permission denied message -->
+    <div class="camera-denied-msg hidden" id="camera-denied-msg">
+      <p class="heading-display">Camera access required</p>
+      <p class="sub-label">Please allow camera access in Chrome settings, then refresh this page.</p>
+    </div>
+
+    <!-- White flash overlay for capture -->
+    <div class="capture-flash" id="capture-flash" aria-hidden="true"></div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SCREEN 4 — Processing / Loading
+       ═══════════════════════════════════════════════════════════════ -->
+  <section id="screen-processing" class="screen" role="main" aria-label="Processing">
+    <div class="screen-inner screen-inner--center">
+      <img src="logo.png" alt="Event Logo" class="logo" />
+
+      <!-- Normal loading state -->
+      <div id="processing-loading">
+        <div class="gold-spinner" aria-hidden="true"></div>
+        <h1 class="heading-display processing-heading">Crafting your future...</h1>
+        <p class="sub-label processing-sub">This will take a few seconds</p>
+      </div>
+
+      <!-- Error state -->
+      <div id="processing-error" class="hidden">
+        <h1 class="heading-display" style="color: var(--gold-primary);">Something went wrong</h1>
+        <p class="sub-label">Please try again</p>
+        <div class="error-btn-row">
+          <button class="btn-gold-ghost" id="processing-retry-btn" type="button">Try Again</button>
+          <button class="btn-dim-ghost" id="processing-startover-btn" type="button">Start Over</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SCREEN 5 — Final Result
+       ═══════════════════════════════════════════════════════════════ -->
+  <section id="screen-result" class="screen" role="main" aria-label="Your Photo Result">
+    <div class="screen-inner">
+      <h1 class="heading-display result-heading" id="result-heading">Your photo is ready!</h1>
+
+      <!-- Composited image display -->
+      <div class="result-image-wrap">
+        <canvas id="result-display-canvas" aria-label="Your generated photo booth portrait"></canvas>
+      </div>
+
+      <!-- Action buttons -->
+      <div class="result-btn-row">
+        <button class="btn-gold-ghost result-btn" id="btn-qr" type="button">
+          <span class="btn-icon">&#9638;</span>
+          Get on your phone
+        </button>
+        <button class="btn-outline-white result-btn" id="btn-print" type="button">
+          <span class="btn-icon">&#128438;</span>
+          Print Photo
+        </button>
+        <button class="btn-dim-ghost result-btn" id="btn-startover" type="button">
+          <span class="btn-icon">&#8635;</span>
+          Start Over
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       QR CODE MODAL
+       ═══════════════════════════════════════════════════════════════ -->
+  <div id="qr-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-label="QR Code">
+    <div class="modal-card">
+      <button class="modal-close-btn" id="qr-modal-close" type="button" aria-label="Close QR modal">&#10005;</button>
+      <div id="qr-canvas-wrap"></div>
+      <p class="modal-sub">Scan with your phone camera</p>
+    </div>
+  </div>
+
+  <!-- Offscreen canvas for webcam capture at 1080×1920 -->
+  <canvas id="capture-canvas" width="1080" height="1920" style="display:none;" aria-hidden="true"></canvas>
+
+  <!-- JS Modules (config must be first) -->
+  <div id="camera-selector-wrap">
+    <select id="camera-selector" aria-label="Select Camera"></select>
+  </div>
+  <script src="config.js"></script>
+  <script src="print-handler.js"></script>
+  <script src="gemini.js"></script>
+  <script src="compositor.js"></script>
+  <script src="qr-handler.js"></script>
+  <script src="mediapipe-handler.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
